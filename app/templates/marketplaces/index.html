@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Marketplaces – {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-shop me-2"></i>Marketplaces</h4>
+  <a href="{{ url_for('marketplaces.novo') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Novo Marketplace
+  </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nome</th>
+          <th>Conta</th>
+          <th>Status</th>
+          <th class="text-end">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in marketplaces %}
+        <tr>
+          <td class="fw-semibold">{{ m.nome }}</td>
+          <td class="text-muted small">{{ m.nome_conta or '—' }}</td>
+          <td>
+            {% if m.ativo %}
+              <span class="badge bg-success">Ativo</span>
+            {% else %}
+              <span class="badge bg-danger">Inativo</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('marketplaces.editar', id=m.id) }}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="POST" action="{{ url_for('marketplaces.toggle_ativo', id=m.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="btn btn-sm {{ 'btn-outline-danger' if m.ativo else 'btn-outline-success' }}"
+                      title="{{ 'Desativar' if m.ativo else 'Ativar' }}">
+                <i class="bi bi-{{ 'toggle-on' if m.ativo else 'toggle-off' }}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-center text-muted py-4">Nenhum marketplace cadastrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

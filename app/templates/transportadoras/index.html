@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Transportadoras – {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-truck me-2"></i>Transportadoras</h4>
+  <a href="{{ url_for('transportadoras.novo') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nova Transportadora
+  </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nome</th>
+          <th>Valor Padrão</th>
+          <th>Status</th>
+          <th class="text-end">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transportadoras %}
+        <tr>
+          <td class="fw-semibold">{{ t.nome }}</td>
+          <td class="small">{{ t.valor_padrao | moeda_br }}</td>
+          <td>
+            {% if t.ativo %}
+              <span class="badge bg-success">Ativo</span>
+            {% else %}
+              <span class="badge bg-danger">Inativo</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('transportadoras.editar', id=t.id) }}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="POST" action="{{ url_for('transportadoras.toggle_ativo', id=t.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="btn btn-sm {{ 'btn-outline-danger' if t.ativo else 'btn-outline-success' }}"
+                      title="{{ 'Desativar' if t.ativo else 'Ativar' }}">
+                <i class="bi bi-{{ 'toggle-on' if t.ativo else 'toggle-off' }}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-center text-muted py-4">Nenhuma transportadora cadastrada.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

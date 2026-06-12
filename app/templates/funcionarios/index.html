@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Funcionários – {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-person-badge me-2"></i>Funcionários</h4>
+  <a href="{{ url_for('funcionarios.novo') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Novo Funcionário
+  </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nome</th>
+          <th>Status</th>
+          <th class="text-end">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in funcionarios %}
+        <tr>
+          <td class="fw-semibold">{{ f.nome }}</td>
+          <td>
+            {% if f.ativo %}
+              <span class="badge bg-success">Ativo</span>
+            {% else %}
+              <span class="badge bg-danger">Inativo</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('funcionarios.editar', id=f.id) }}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="POST" action="{{ url_for('funcionarios.toggle_ativo', id=f.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="btn btn-sm {{ 'btn-outline-danger' if f.ativo else 'btn-outline-success' }}"
+                      title="{{ 'Desativar' if f.ativo else 'Ativar' }}">
+                <i class="bi bi-{{ 'toggle-on' if f.ativo else 'toggle-off' }}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="text-center text-muted py-4">Nenhum funcionário cadastrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

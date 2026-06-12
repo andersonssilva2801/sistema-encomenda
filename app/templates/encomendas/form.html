@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }} – {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-2">
+  <a href="{{ url_for('encomendas.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="mb-0 fw-bold">{{ titulo }}</h4>
+</div>
+
+<div class="row">
+  <div class="col-12 col-md-9 col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="POST" novalidate>
+          {{ form.hidden_tag() }}
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{{ form.tipo_movimento.label.text }}</label>
+              {{ form.tipo_movimento(class="form-select" + (" is-invalid" if form.tipo_movimento.errors else "")) }}
+              {% for e in form.tipo_movimento.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{{ form.data_envio.label.text }}</label>
+              {{ form.data_envio(class="form-control" + (" is-invalid" if form.data_envio.errors else ""),
+                                 type="date") }}
+              {% for e in form.data_envio.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{{ form.marketplace_id.label.text }}</label>
+              {{ form.marketplace_id(class="form-select" + (" is-invalid" if form.marketplace_id.errors else "")) }}
+              {% for e in form.marketplace_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{{ form.transportadora_id.label.text }}</label>
+              {{ form.transportadora_id(class="form-select" + (" is-invalid" if form.transportadora_id.errors else "")) }}
+              {% for e in form.transportadora_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{{ form.funcionario_id.label.text }}</label>
+              {{ form.funcionario_id(class="form-select" + (" is-invalid" if form.funcionario_id.errors else "")) }}
+              {% for e in form.funcionario_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">{{ form.quantidade_caixas.label.text }}</label>
+              {{ form.quantidade_caixas(class="form-control" + (" is-invalid" if form.quantidade_caixas.errors else ""),
+                                        placeholder="Ex: 10", min="1") }}
+              {% for e in form.quantidade_caixas.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">{{ form.observacoes.label.text }}</label>
+              {{ form.observacoes(class="form-control" + (" is-invalid" if form.observacoes.errors else ""),
+                                  rows=3, placeholder="Observações opcionais...") }}
+              {% for e in form.observacoes.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('encomendas.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+            {% if encomenda is defined %}
+              <form method="POST" action="{{ url_for('encomendas.excluir', id=encomenda.id) }}"
+                    class="ms-auto"
+                    onsubmit="return confirm('Confirmar exclusão da encomenda #{{ encomenda.codigo_formatado }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                  <i class="bi bi-trash me-1"></i>Excluir
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

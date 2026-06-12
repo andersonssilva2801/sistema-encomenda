@@ -1,0 +1,59 @@
+# ===========================================
+# Sistema de Encomendas - .gitignore
+# ===========================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ambiente virtual
+venv/
+env/
+.venv/
+ENV/
+
+# Variáveis de ambiente
+.env
+
+# Banco de dados local
+instance/
+*.db
+*.sqlite3
+
+# Flask
+.webassets-cache
+
+# IDE e ferramentas locais
+.vscode/
+.idea/
+.claude/
+
+# Imagens temporárias
+*.png
+*.jpg
+*.jpeg
+*.swp
+*.swo
+*~
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Migrações (manter diretório, ignorar cache)
+migrations/__pycache__/
+
+# Distribuição
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Logs
+*.log
+
+# Relatórios gerados
+exports/

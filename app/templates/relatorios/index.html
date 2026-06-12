@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% block title %}Relatórios – {{ app_name }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  .stat-card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.07);
+    transition: transform .15s;
+  }
+  .stat-card:hover { transform: translateY(-2px); }
+  .stat-card .label { font-size: .78rem; color: #6c757d; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .stat-card .value { font-size: 1.7rem; font-weight: 700; color: #1e3a5f; }
+  .chart-card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.07);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb + cabeçalho -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}" class="text-decoration-none">Início</a></li>
+        <li class="breadcrumb-item active">Relatórios</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0 fw-bold">Relatórios</h4>
+  </div>
+
+  <!-- Seletor de período -->
+  <form method="GET" action="{{ url_for('relatorios.index') }}" class="d-flex gap-2 align-items-center">
+    <label class="form-label mb-0 fw-semibold text-nowrap small">Período</label>
+    <select name="periodo" class="form-select form-select-sm" style="min-width:160px">
+      {% for valor, nome in periodos %}
+        <option value="{{ valor }}" {{ 'selected' if periodo == valor }}>{{ nome }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm fw-semibold px-3">GERAR</button>
+  </form>
+</div>
+
+<!-- Gráficos -->
+<div class="row g-3 mb-4">
+  <!-- Donut: por tipo -->
+  <div class="col-md-5">
+    <div class="card chart-card h-100">
+      <div class="card-header bg-white fw-semibold border-bottom-0 pb-0">
+        Encomendas por Tipo
+      </div>
+      <div class="card-body d-flex justify-content-center align-items-center">
+        {% if tipo_data %}
+          <div style="max-width:280px; width:100%">
+            <canvas id="chartTipo"></canvas>
+          </div>
+        {% else %}
+          <p class="text-muted text-center py-5">Nenhum dado no período selecionado.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra: por transportadora -->
+  <div class="col-md-7">
+    <div class="card chart-card h-100">
+      <div class="card-header bg-white fw-semibold border-bottom-0 pb-0">
+        Encomendas por Transportadora
+        <small class="text-muted fw-normal">(top 5 por caixas)</small>
+      </div>
+      <div class="card-body">
+        {% if transp_data %}
+          <canvas id="chartTransp" style="max-height:240px"></canvas>
+        {% else %}
+          <p class="text-muted text-center py-5">Nenhum dado no período selecionado.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cards de resumo -->
+<div class="row g-3">
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3">
+      <div class="label">Total de Encomendas</div>
+      <div class="value">{{ total_encomendas | numero_br }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3">
+      <div class="label">Total de Caixas</div>
+      <div class="value">{{ total_caixas | numero_br }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3">
+      <div class="label">Valor Total (Frete)</div>
+      <div class="value" style="font-size:1.35rem">{{ valor_total_frete | moeda_br }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card p-3">
+      <div class="label">Média por Encomenda</div>
+      <div class="value" style="font-size:1.35rem">{{ media_por_encomenda | moeda_br }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Período de referência -->
+<p class="text-muted small mt-3">
+  <i class="bi bi-calendar3 me-1"></i>
+  Período: {{ data_inicio | data_br }} a {{ data_fim | data_br }}
+</p>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Cores padrão
+  const CORES = ['#1e6fe0', '#28a745', '#ffc107', '#dc3545', '#6c757d'];
+
+  {% if tipo_data %}
+  // Gráfico Donut – Encomendas por Tipo
+  new Chart(document.getElementById('chartTipo'), {
+    type: 'doughnut',
+    data: {
+      labels: {{ tipo_labels | tojson }},
+      datasets: [{
+        data: {{ tipo_data | tojson }},
+        backgroundColor: ['#1e6fe0', '#28a745', '#ffc107'],
+        borderWidth: 2,
+        borderColor: '#fff',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { padding: 16, font: { size: 13 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = ((ctx.parsed / total) * 100).toFixed(0);
+              return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      },
+      cutout: '60%',
+    }
+  });
+  {% endif %}
+
+  {% if transp_data %}
+  // Gráfico Barra – Encomendas por Transportadora
+  new Chart(document.getElementById('chartTransp'), {
+    type: 'bar',
+    data: {
+      labels: {{ transp_labels | tojson }},
+      datasets: [{
+        label: 'Caixas',
+        data: {{ transp_data | tojson }},
+        backgroundColor: '#1e6fe0',
+        borderRadius: 4,
+        barPercentage: 0.55,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.y.toLocaleString('pt-BR')} caixas`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: val => val.toLocaleString('pt-BR')
+          },
+          grid: { color: 'rgba(0,0,0,.06)' }
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+  {% endif %}
+</script>
+{% endblock %}

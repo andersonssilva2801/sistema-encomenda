@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }} – {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-2">
+  <a href="{{ url_for('usuarios.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="mb-0 fw-bold">{{ titulo }}</h4>
+</div>
+
+<div class="row">
+  <div class="col-12 col-md-7 col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="POST" novalidate>
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.nome.label.text }}</label>
+            {{ form.nome(class="form-control" + (" is-invalid" if form.nome.errors else ""),
+                        placeholder="Nome completo") }}
+            {% for e in form.nome.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.login.label.text }}</label>
+            {{ form.login(class="form-control" + (" is-invalid" if form.login.errors else ""),
+                         placeholder="Login de acesso") }}
+            {% for e in form.login.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.perfil.label.text }}</label>
+            {{ form.perfil(class="form-select" + (" is-invalid" if form.perfil.errors else "")) }}
+            {% for e in form.perfil.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.senha.label.text }}
+              {% if usuario is defined %}<span class="text-muted small fw-normal">(deixe vazio para não alterar)</span>{% endif %}
+            </label>
+            {{ form.senha(class="form-control" + (" is-invalid" if form.senha.errors else ""),
+                         placeholder="Mínimo 6 caracteres") }}
+            {% for e in form.senha.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.confirmar_senha.label.text }}</label>
+            {{ form.confirmar_senha(class="form-control" + (" is-invalid" if form.confirmar_senha.errors else "")) }}
+            {% for e in form.confirmar_senha.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              {{ form.ativo(class="form-check-input") }}
+              <label class="form-check-label">{{ form.ativo.label.text }}</label>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('usuarios.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
