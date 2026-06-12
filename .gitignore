@@ -30,10 +30,11 @@ instance/
 .idea/
 .claude/
 
-# Imagens temporárias
-*.png
+# Imagens temporárias (exceto logo da aplicação)
 *.jpg
 *.jpeg
+*.png
+!app/static/img/*.png
 *.swp
 *.swo
 *~

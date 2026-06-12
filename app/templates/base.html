@@ -65,8 +65,9 @@
     <button class="btn btn-link text-white me-2 p-0" id="sidebarToggle" style="font-size:1.3rem">
       <i class="bi bi-list"></i>
     </button>
-    <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
-      <i class="bi bi-box-seam me-1"></i>{{ app_name }}
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('dashboard.index') }}">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" height="36" alt="Logo Dépayser">
+      <span>{{ app_name }}</span>
     </a>
     <div class="ms-auto d-flex align-items-center gap-2">
       {% if current_user.is_authenticated %}
