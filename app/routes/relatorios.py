@@ -77,6 +77,23 @@ def index():
     tipo_labels = [r.tipo_movimento for r in por_tipo]
     tipo_data   = [r.total for r in por_tipo]
 
+    # Cards por tipo: caixas + valor frete
+    por_tipo_stats = db.session.query(
+        Encomenda.tipo_movimento,
+        func.coalesce(func.sum(Encomenda.quantidade_caixas), 0).label('total_caixas'),
+        func.coalesce(func.sum(Transportadora.valor_padrao * Encomenda.quantidade_caixas), 0).label('valor_frete')
+    ).select_from(Encomenda
+    ).join(Transportadora, Encomenda.transportadora_id == Transportadora.id
+    ).filter(Encomenda.data_envio.between(inicio, fim)
+    ).group_by(Encomenda.tipo_movimento).all()
+
+    stats_por_tipo = {r.tipo_movimento: {'caixas': int(r.total_caixas), 'valor': float(r.valor_frete)}
+                      for r in por_tipo_stats}
+    envio_stats    = stats_por_tipo.get('Envio',     {'caixas': 0, 'valor': 0.0})
+    devolucao_stats = stats_por_tipo.get('Devolução', {'caixas': 0, 'valor': 0.0})
+    saldo_valor    = envio_stats['valor'] - devolucao_stats['valor']
+    saldo_caixas   = envio_stats['caixas'] - devolucao_stats['caixas']
+
     # Dados gráfico por transportadora (top 5 por qtd caixas)
     por_transp = db.session.query(
         Transportadora.nome,
@@ -106,4 +123,8 @@ def index():
         transp_data=transp_data,
         data_inicio=inicio,
         data_fim=fim,
+        envio_stats=envio_stats,
+        devolucao_stats=devolucao_stats,
+        saldo_valor=saldo_valor,
+        saldo_caixas=saldo_caixas,
     )
