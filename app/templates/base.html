@@ -126,6 +126,12 @@
         <i class="bi bi-search"></i> Consultas
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('leitura_qrcode') %}active{% endif %}"
+         href="{{ url_for('leitura_qrcode.index') }}">
+        <i class="bi bi-qr-code-scan"></i> Leitura de Pacotes
+      </a>
+    </li>
 
     {% if current_user.is_admin %}
     <li><div class="nav-section">Cadastros</div></li>

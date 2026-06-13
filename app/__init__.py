@@ -78,6 +78,7 @@ def _register_blueprints(app):
     from app.routes.encomendas import encomendas_bp
     from app.routes.consultas import consultas_bp
     from app.routes.relatorios import relatorios_bp
+    from app.routes.leitura_qrcode import leitura_qrcode_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -88,6 +89,7 @@ def _register_blueprints(app):
     app.register_blueprint(encomendas_bp)
     app.register_blueprint(consultas_bp)
     app.register_blueprint(relatorios_bp)
+    app.register_blueprint(leitura_qrcode_bp)
 
 
 def _register_template_utils(app):
