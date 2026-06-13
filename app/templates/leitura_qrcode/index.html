@@ -4,20 +4,53 @@
 {% block extra_head %}
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-  #qr-reader { border-radius: 10px; overflow: hidden; }
-  #qr-reader video { border-radius: 10px; }
   .scan-card {
     border: none;
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0,0,0,.08);
   }
   .toast-container { z-index: 9999; }
-  .status-dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-  }
   #historico-table tbody tr:first-child td { font-weight: 600; }
+
+  /* ── Estilo do scanner embutido ── */
+  #qr-reader {
+    border: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  #qr-reader__scan_region {
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+  }
+  #qr-reader__scan_region img { display: none; }   /* esconde logo html5-qrcode */
+  #qr-reader__dashboard { padding: 8px 0 0 !important; }
+  #qr-reader__dashboard_section_csr span { font-size: .85rem; color: #6c757d; }
+  #qr-reader__dashboard_section_csr button,
+  #qr-reader__status_span {
+    font-size: .82rem;
+  }
+  #qr-reader__camera_selection {
+    width: 100%;
+    padding: .375rem .75rem;
+    font-size: .875rem;
+    border: 1px solid #ced4da;
+    border-radius: .375rem;
+    margin-bottom: 8px;
+  }
+  #qr-reader__dashboard_section_csr > button {
+    width: 100%;
+    padding: .45rem .75rem;
+    border-radius: .375rem;
+    background-color: #1e6fe0;
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  #qr-reader__dashboard_section_csr > button:hover { background-color: #1558b0; }
+  #qr-reader__dashboard_section_swaplink { display: none; }  /* oculta troca de modo */
 </style>
 {% endblock %}
 
@@ -33,10 +66,6 @@
     </nav>
     <h4 class="mb-0 fw-bold">Leitura de Pacotes</h4>
   </div>
-  <div class="d-flex align-items-center gap-2">
-    <span class="status-dot bg-secondary" id="status-dot"></span>
-    <span class="small text-muted" id="status-text">Câmera inativa</span>
-  </div>
 </div>
 
 <div class="row g-4">
@@ -46,17 +75,14 @@
     <div class="card scan-card p-3 mb-3">
       <h6 class="fw-bold mb-3"><i class="bi bi-qr-code-scan me-2"></i>Scanner QR Code</h6>
 
-      <!-- Área do vídeo -->
-      <div id="qr-reader" style="width:100%"></div>
+      <!-- Html5QrcodeScanner renderiza aqui: seletor de câmera + vídeo -->
+      <div id="qr-reader"></div>
 
-      <div class="d-flex gap-2 mt-3">
-        <button class="btn btn-primary btn-sm fw-semibold" id="btn-iniciar">
-          <i class="bi bi-camera-video me-1"></i>Iniciar Câmera
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" id="btn-parar" disabled>
-          <i class="bi bi-stop-circle me-1"></i>Parar
-        </button>
-      </div>
+      <p class="text-muted small mt-2 mb-0">
+        <i class="bi bi-lightbulb me-1"></i>
+        Selecione a câmera, clique em <strong>Iniciar</strong> e aponte para o QR Code.
+        Em celulares, use a câmera traseira para melhor leitura de telas.
+      </p>
     </div>
 
     <!-- Entrada manual -->
@@ -64,14 +90,14 @@
       <h6 class="fw-bold mb-3"><i class="bi bi-keyboard me-2"></i>Leitura Manual / Leitor Externo</h6>
       <div class="input-group">
         <input type="text" id="input-manual" class="form-control"
-               placeholder="Cole ou digite o código do QR aqui" autofocus>
+               placeholder="Cole ou digite o código aqui">
         <button class="btn btn-success fw-semibold" id="btn-manual">
           <i class="bi bi-check2-circle me-1"></i>Registrar
         </button>
       </div>
       <small class="text-muted mt-2 d-block">
         <i class="bi bi-info-circle me-1"></i>
-        Leitores de código de barras USB funcionam automaticamente neste campo.
+        Leitores USB/Bluetooth funcionam automaticamente neste campo.
       </small>
     </div>
   </div>
@@ -98,9 +124,7 @@
             {% for leitura in historico.items %}
             <tr>
               <td class="text-muted small">{{ leitura.id }}</td>
-              <td style="max-width:260px;word-break:break-all;font-size:.85rem">
-                {{ leitura.codigo_lido }}
-              </td>
+              <td style="max-width:260px;word-break:break-all;font-size:.85rem">{{ leitura.codigo_lido }}</td>
               <td class="text-nowrap small">{{ leitura.data_hora | datetime_br }}</td>
               <td class="text-center">
                 {% if leitura.identificado %}
@@ -122,7 +146,6 @@
         </table>
       </div>
 
-      <!-- Paginação -->
       {% if historico.pages > 1 %}
       <nav class="mt-3">
         <ul class="pagination pagination-sm justify-content-center mb-0">
@@ -148,7 +171,6 @@
         </ul>
       </nav>
       {% endif %}
-
     </div>
   </div>
 </div>
@@ -157,7 +179,7 @@
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
   <div id="toast-scan" class="toast align-items-center text-white border-0" role="alert" aria-atomic="true">
     <div class="d-flex">
-      <div class="toast-body fw-semibold" id="toast-msg">Código registrado!</div>
+      <div class="toast-body fw-semibold" id="toast-msg"></div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
     </div>
   </div>
@@ -167,19 +189,19 @@
 {% block extra_scripts %}
 <script>
 const URL_SALVAR = "{{ url_for('leitura_qrcode.salvar') }}";
-let scanner = null;
 let ultimoCodigo = '';
 let debounceTimer = null;
 
 /* ── Registrar leitura ── */
 async function registrarCodigo(codigo) {
-  if (!codigo.trim()) return;
+  codigo = (codigo || '').trim();
+  if (!codigo) return;
 
-  // Debounce: evita registrar o mesmo código duas vezes em 2s
+  // Debounce: evita duplicar o mesmo código em 3s (câmeras detectam várias vezes)
   if (codigo === ultimoCodigo) return;
   ultimoCodigo = codigo;
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => { ultimoCodigo = ''; }, 2000);
+  debounceTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
 
   try {
     const resp = await fetch(URL_SALVAR, {
@@ -189,17 +211,17 @@ async function registrarCodigo(codigo) {
     });
     const data = await resp.json();
     if (data.ok) {
-      mostrarToast('✓ Código registrado: ' + data.codigo_lido.substring(0, 60), 'bg-success');
+      mostrarToast('✓ ' + data.codigo_lido.substring(0, 80), 'bg-success');
       adicionarLinha(data);
     } else {
       mostrarToast('Erro: ' + data.erro, 'bg-danger');
     }
-  } catch (e) {
+  } catch {
     mostrarToast('Erro de conexão.', 'bg-danger');
   }
 }
 
-/* ── Adicionar linha no topo da tabela ── */
+/* ── Tabela ── */
 function adicionarLinha(data) {
   const tbody = document.getElementById('historico-body');
   const emptyRow = document.getElementById('empty-row');
@@ -218,8 +240,8 @@ function adicionarLinha(data) {
   badge.textContent = parseInt(badge.textContent || 0) + 1;
 }
 
-function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 /* ── Toast ── */
@@ -227,50 +249,40 @@ function mostrarToast(msg, bgClass) {
   const el = document.getElementById('toast-scan');
   el.className = `toast align-items-center text-white border-0 ${bgClass}`;
   document.getElementById('toast-msg').textContent = msg;
-  bootstrap.Toast.getOrCreateInstance(el, { delay: 3000 }).show();
+  bootstrap.Toast.getOrCreateInstance(el, { delay: 4000 }).show();
 }
 
-/* ── Câmera ── */
-function setStatus(on) {
-  const dot = document.getElementById('status-dot');
-  const txt = document.getElementById('status-text');
-  dot.className = `status-dot ${on ? 'bg-success' : 'bg-secondary'}`;
-  txt.textContent = on ? 'Câmera ativa' : 'Câmera inativa';
-  document.getElementById('btn-iniciar').disabled = on;
-  document.getElementById('btn-parar').disabled = !on;
-}
+/* ── Html5QrcodeScanner ──
+   - Sem qrbox → escaneia o frame inteiro (muito mais fácil de acertar)
+   - fps: 25 → captura mais frames por segundo
+   - experimentalFeatures.useBarCodeDetectorIfSupported → usa API nativa do browser quando disponível (Chrome 83+, Edge, Android), muito mais rápida
+   - showTorchButtonIfSupported → botão de lanterna em celular
+   - rememberLastUsedCamera → lembra a câmera selecionada
+*/
+const scanner = new Html5QrcodeScanner(
+  'qr-reader',
+  {
+    fps: 25,
+    rememberLastUsedCamera: true,
+    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+    showTorchButtonIfSupported: true,
+    showZoomSliderIfSupported: true,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+  },
+  /* verbose= */ false
+);
 
-document.getElementById('btn-iniciar').addEventListener('click', () => {
-  scanner = new Html5Qrcode('qr-reader');
-  scanner.start(
-    { facingMode: 'environment' },
-    { fps: 10, qrbox: { width: 250, height: 250 } },
-    (decodedText) => { registrarCodigo(decodedText); }
-  ).then(() => setStatus(true))
-   .catch(err => mostrarToast('Câmera indisponível: ' + err, 'bg-warning text-dark'));
-});
-
-document.getElementById('btn-parar').addEventListener('click', () => {
-  if (scanner) {
-    scanner.stop().then(() => {
-      scanner.clear();
-      scanner = null;
-      setStatus(false);
-    });
-  }
-});
+scanner.render(
+  (decodedText) => { registrarCodigo(decodedText); },
+  (_err) => { /* erros de frame são normais, ignorar */ }
+);
 
 /* ── Entrada manual ── */
 function submeterManual() {
   const input = document.getElementById('input-manual');
   const val = input.value.trim();
-  if (val) {
-    registrarCodigo(val);
-    input.value = '';
-    input.focus();
-  }
+  if (val) { registrarCodigo(val); input.value = ''; input.focus(); }
 }
-
 document.getElementById('btn-manual').addEventListener('click', submeterManual);
 document.getElementById('input-manual').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); submeterManual(); }
