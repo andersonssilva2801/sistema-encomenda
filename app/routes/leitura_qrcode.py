@@ -42,6 +42,16 @@ def salvar():
     if not codigo:
         return jsonify({'ok': False, 'erro': 'Código vazio'}), 400
 
+    # Verifica se este código já foi lido anteriormente
+    existente = QrcodeLeitura.query.filter_by(codigo_lido=codigo[:1000]).first()
+    if existente:
+        return jsonify({
+            'ok': False,
+            'duplicado': True,
+            'erro': 'Código já registrado anteriormente',
+            'data_hora_anterior': existente.data_hora.strftime('%d/%m/%Y %H:%M:%S'),
+        })
+
     leitura = QrcodeLeitura(
         codigo_lido=codigo[:1000],
         data_hora=datetime.now(timezone.utc),
