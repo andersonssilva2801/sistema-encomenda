@@ -50,11 +50,6 @@
     <div class="card scan-card p-3 mb-3">
       <h6 class="fw-bold mb-3"><i class="bi bi-qr-code-scan me-2"></i>Scanner QR Code</h6>
 
-      <!-- Seletor de câmera -->
-      <select id="camera-select" class="form-select form-select-sm mb-2" style="display:none">
-        <option value="">Carregando câmeras…</option>
-      </select>
-
       <!-- Vídeo + canvas de overlay -->
       <div class="video-wrap mb-2">
         <video id="qr-video" autoplay playsinline muted></video>
@@ -193,45 +188,13 @@ let ultimoCodigo = '';
 let debTimer     = null;
 
 /* ──────────────────────────────────────────
-   Câmeras disponíveis
-────────────────────────────────────────── */
-async function listarCameras() {
-  try {
-    // Pede permissão primeiro (necessário para enumerateDevices retornar labels)
-    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
-    tmp.getTracks().forEach(t => t.stop());
-
-    const devices  = await navigator.mediaDevices.enumerateDevices();
-    const cameras  = devices.filter(d => d.kind === 'videoinput');
-    const sel      = document.getElementById('camera-select');
-
-    sel.innerHTML = '';
-    cameras.forEach((cam, i) => {
-      const opt   = document.createElement('option');
-      opt.value   = cam.deviceId;
-      opt.text    = cam.label || `Câmera ${i + 1}`;
-      // Prefere câmera traseira por padrão
-      if (/back|rear|traseira|environment/i.test(cam.label)) opt.selected = true;
-      sel.appendChild(opt);
-    });
-
-    sel.style.display = cameras.length > 1 ? 'block' : 'none';
-  } catch (e) {
-    setFeedback('Permissão de câmera negada.', 'text-danger');
-  }
-}
-
-/* ──────────────────────────────────────────
-   Iniciar câmera
+   Iniciar câmera traseira
 ────────────────────────────────────────── */
 async function iniciarCamera() {
   pararCamera();
 
-  const deviceId = document.getElementById('camera-select').value;
   const constraints = {
-    video: deviceId
-      ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-      : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
   };
 
   try {
@@ -386,7 +349,6 @@ function escHtml(s) {
 ────────────────────────────────────────── */
 document.getElementById('btn-iniciar').addEventListener('click', iniciarCamera);
 document.getElementById('btn-parar').addEventListener('click', pararCamera);
-document.getElementById('camera-select').addEventListener('change', () => { if (stream) iniciarCamera(); });
 
 // Entrada manual
 function submeterManual() {
@@ -401,8 +363,5 @@ document.getElementById('input-manual').addEventListener('keydown', e => {
 
 // Para câmera ao sair da página
 window.addEventListener('beforeunload', pararCamera);
-
-// Inicializa lista de câmeras ao carregar
-listarCameras();
 </script>
 {% endblock %}
