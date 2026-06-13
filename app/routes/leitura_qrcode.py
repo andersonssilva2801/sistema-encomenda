@@ -22,6 +22,18 @@ def index():
 
 
 @csrf.exempt
+@leitura_qrcode_bp.route('/excluir/<int:id>', methods=['POST'])
+@login_required
+def excluir(id):
+    leitura = db.session.get(QrcodeLeitura, id)
+    if not leitura:
+        return jsonify({'ok': False, 'erro': 'Não encontrado'}), 404
+    db.session.delete(leitura)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@csrf.exempt
 @leitura_qrcode_bp.route('/salvar', methods=['POST'])
 @login_required
 def salvar():

@@ -63,10 +63,10 @@
 
       <!-- Botões -->
       <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm fw-semibold" id="btn-iniciar">
+        <button class="btn btn-primary btn-sm fw-semibold" id="btn-iniciar" style="display:none">
           <i class="bi bi-camera-video me-1"></i>Iniciar Câmera
         </button>
-        <button class="btn btn-outline-secondary btn-sm" id="btn-parar" style="display:none">
+        <button class="btn btn-outline-secondary btn-sm" id="btn-parar">
           <i class="bi bi-stop-circle me-1"></i>Parar
         </button>
       </div>
@@ -104,23 +104,31 @@
               <th>Código Lido</th>
               <th>Data / Hora</th>
               <th class="text-center">Identificado</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="historico-body">
             {% for leitura in historico.items %}
-            <tr>
+            <tr id="row-{{ leitura.id }}">
               <td class="text-muted small">{{ leitura.id }}</td>
-              <td style="max-width:260px;word-break:break-all;font-size:.85rem">{{ leitura.codigo_lido }}</td>
+              <td style="max-width:240px;word-break:break-all;font-size:.85rem">{{ leitura.codigo_lido }}</td>
               <td class="text-nowrap small">{{ leitura.data_hora | datetime_br }}</td>
               <td class="text-center">
                 <span class="badge {{ 'bg-success' if leitura.identificado else 'bg-secondary' }}">
                   {{ 'Sim' if leitura.identificado else 'Não' }}
                 </span>
               </td>
+              <td class="text-center">
+                <button class="btn btn-link btn-sm text-danger p-0"
+                        onclick="excluirLeitura({{ leitura.id }})"
+                        title="Excluir">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
             </tr>
             {% else %}
             <tr id="empty-row">
-              <td colspan="4" class="text-center text-muted py-4">
+              <td colspan="5" class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-4 d-block mb-1"></i>Nenhuma leitura ainda.
               </td>
             </tr>
@@ -275,13 +283,22 @@ function scanLoop() {
 
 /* ──────────────────────────────────────────
    Registrar código
+   Debounce correto: enquanto o mesmo QR estiver em vista,
+   o timer é reiniciado a cada frame — só libera novo
+   registro 3s DEPOIS que o QR sair do campo da câmera.
 ────────────────────────────────────────── */
 async function registrarCodigo(codigo) {
   codigo = (codigo || '').trim();
   if (!codigo) return;
 
-  // Debounce: ignora o mesmo código por 3s
-  if (codigo === ultimoCodigo) return;
+  if (codigo === ultimoCodigo) {
+    // Mesmo código: apenas reinicia o timer e ignora
+    clearTimeout(debTimer);
+    debTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
+    return;
+  }
+
+  // Código novo: bloqueia e registra
   ultimoCodigo = codigo;
   clearTimeout(debTimer);
   debTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
@@ -301,6 +318,36 @@ async function registrarCodigo(codigo) {
       setFeedback('<i class="bi bi-circle-fill text-success me-1" style="font-size:.6rem"></i>Procurando QR Code…', '');
     } else {
       mostrarToast('Erro: ' + data.erro, 'bg-danger');
+    }
+  } catch {
+    mostrarToast('Erro de conexão.', 'bg-danger');
+  }
+}
+
+/* ──────────────────────────────────────────
+   Excluir leitura
+────────────────────────────────────────── */
+async function excluirLeitura(id) {
+  if (!confirm('Excluir este registro?')) return;
+  try {
+    const resp = await fetch(`/leitura-qrcode/excluir/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const row = document.getElementById('row-' + id);
+      if (row) row.remove();
+      const badge = document.getElementById('badge-total');
+      const total = Math.max(0, parseInt(badge.textContent || 0) - 1);
+      badge.textContent = total;
+      if (total === 0) {
+        document.getElementById('historico-body').innerHTML =
+          `<tr id="empty-row"><td colspan="5" class="text-center text-muted py-4">
+            <i class="bi bi-inbox fs-4 d-block mb-1"></i>Nenhuma leitura ainda.</td></tr>`;
+      }
+    } else {
+      mostrarToast('Erro ao excluir.', 'bg-danger');
     }
   } catch {
     mostrarToast('Erro de conexão.', 'bg-danger');
@@ -329,11 +376,17 @@ function adicionarLinha(data) {
   if (emptyRow) emptyRow.remove();
 
   const tr = document.createElement('tr');
+  tr.id = 'row-' + data.id;
   tr.innerHTML = `
     <td class="text-muted small">${data.id}</td>
-    <td style="max-width:260px;word-break:break-all;font-size:.85rem">${escHtml(data.codigo_lido)}</td>
+    <td style="max-width:240px;word-break:break-all;font-size:.85rem">${escHtml(data.codigo_lido)}</td>
     <td class="text-nowrap small">${data.data_hora}</td>
     <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+    <td class="text-center">
+      <button class="btn btn-link btn-sm text-danger p-0" onclick="excluirLeitura(${data.id})" title="Excluir">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>
   `;
   tbody.insertBefore(tr, tbody.firstChild);
   document.getElementById('badge-total').textContent =
@@ -363,5 +416,8 @@ document.getElementById('input-manual').addEventListener('keydown', e => {
 
 // Para câmera ao sair da página
 window.addEventListener('beforeunload', pararCamera);
+
+// Abre câmera automaticamente ao carregar a página
+iniciarCamera();
 </script>
 {% endblock %}
