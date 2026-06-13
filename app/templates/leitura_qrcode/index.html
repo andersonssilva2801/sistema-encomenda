@@ -240,43 +240,43 @@ function pararCamera() {
 function scanLoop() {
   if (!stream) return;
 
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    const w = video.videoWidth;
-    const h = video.videoHeight;
+  try {
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      const w = video.videoWidth;
+      const h = video.videoHeight;
 
-    if (w && h) {
-      canvas.width  = w;
-      canvas.height = h;
-      scanCtx.drawImage(video, 0, 0, w, h);
+      if (w && h) {
+        canvas.width  = w;
+        canvas.height = h;
+        scanCtx.drawImage(video, 0, 0, w, h);
 
-      const imageData = scanCtx.getImageData(0, 0, w, h);
-      const code = jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' });
+        const imageData = scanCtx.getImageData(0, 0, w, h);
+        const code = jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' });
 
-      // Sincroniza tamanho do overlay com o vídeo renderizado
-      overlay.width  = video.offsetWidth;
-      overlay.height = video.offsetHeight;
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
+        overlay.width  = video.offsetWidth;
+        overlay.height = video.offsetHeight;
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-      if (code) {
-        // Desenha bounding box verde proporcional ao vídeo renderizado
-        const scaleX = overlay.width  / w;
-        const scaleY = overlay.height / h;
-        const loc = code.location;
+        if (code) {
+          const scaleX = overlay.width  / w;
+          const scaleY = overlay.height / h;
+          const loc    = code.location;
 
-        ctx.beginPath();
-        ctx.moveTo(loc.topLeftCorner.x     * scaleX, loc.topLeftCorner.y     * scaleY);
-        ctx.lineTo(loc.topRightCorner.x    * scaleX, loc.topRightCorner.y    * scaleY);
-        ctx.lineTo(loc.bottomRightCorner.x * scaleX, loc.bottomRightCorner.y * scaleY);
-        ctx.lineTo(loc.bottomLeftCorner.x  * scaleX, loc.bottomLeftCorner.y  * scaleY);
-        ctx.closePath();
-        ctx.lineWidth   = 3;
-        ctx.strokeStyle = '#28a745';
-        ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(loc.topLeftCorner.x     * scaleX, loc.topLeftCorner.y     * scaleY);
+          ctx.lineTo(loc.topRightCorner.x    * scaleX, loc.topRightCorner.y    * scaleY);
+          ctx.lineTo(loc.bottomRightCorner.x * scaleX, loc.bottomRightCorner.y * scaleY);
+          ctx.lineTo(loc.bottomLeftCorner.x  * scaleX, loc.bottomLeftCorner.y  * scaleY);
+          ctx.closePath();
+          ctx.lineWidth   = 3;
+          ctx.strokeStyle = '#28a745';
+          ctx.stroke();
 
-        registrarCodigo(code.data);
+          registrarCodigo(code.data);
+        }
       }
     }
-  }
+  } catch (_) { /* erro de frame — continua o loop */ }
 
   rafId = requestAnimationFrame(scanLoop);
 }
@@ -417,7 +417,7 @@ document.getElementById('input-manual').addEventListener('keydown', e => {
 // Para câmera ao sair da página
 window.addEventListener('beforeunload', pararCamera);
 
-// Abre câmera automaticamente ao carregar a página
-iniciarCamera();
+// Abre câmera automaticamente após todos os recursos carregarem
+window.addEventListener('load', () => iniciarCamera());
 </script>
 {% endblock %}
