@@ -2,31 +2,40 @@
 {% block title %}Leitura de Pacotes – {{ app_name }}{% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
 <style>
   .scan-card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
   .toast-container { z-index: 9999; }
 
+  .video-wrap {
+    position: relative;
+    background: #111;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 220px;
+  }
   #qr-video {
     width: 100%;
-    border-radius: 8px;
-    background: #111;
     display: block;
-  }
-  #qr-overlay {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none;
     border-radius: 8px;
   }
-  .video-wrap { position: relative; }
-
-  #scan-feedback {
-    font-size: .82rem;
-    min-height: 1.4rem;
-    transition: color .2s;
+  /* Overlay de toque — visível quando câmera ainda não foi iniciada */
+  #start-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.65);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    cursor: pointer;
+    gap: 10px;
+    transition: opacity .2s;
   }
+  #start-overlay i { font-size: 2.5rem; }
+  #start-overlay span { font-size: .95rem; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -35,7 +44,9 @@
   <div>
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb mb-1">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}" class="text-decoration-none">Início</a></li>
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('dashboard.index') }}" class="text-decoration-none">Início</a>
+        </li>
         <li class="breadcrumb-item active">Leitura de Pacotes</li>
       </ol>
     </nav>
@@ -50,26 +61,20 @@
     <div class="card scan-card p-3 mb-3">
       <h6 class="fw-bold mb-3"><i class="bi bi-qr-code-scan me-2"></i>Scanner QR Code</h6>
 
-      <!-- Vídeo + canvas de overlay -->
       <div class="video-wrap mb-2">
         <video id="qr-video" autoplay playsinline muted></video>
-        <canvas id="qr-overlay"></canvas>
+        <!-- Overlay: clicável para iniciar câmera -->
+        <div id="start-overlay">
+          <i class="bi bi-camera-video"></i>
+          <span>Toque para iniciar a câmera</span>
+        </div>
       </div>
 
-      <!-- Feedback de leitura -->
-      <div id="scan-feedback" class="text-muted mb-2">
-        <i class="bi bi-camera me-1"></i>Câmera inativa.
-      </div>
+      <div id="scan-feedback" class="small text-muted mb-2">Câmera inativa.</div>
 
-      <!-- Botões -->
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm fw-semibold" id="btn-iniciar" style="display:none">
-          <i class="bi bi-camera-video me-1"></i>Iniciar Câmera
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" id="btn-parar">
-          <i class="bi bi-stop-circle me-1"></i>Parar
-        </button>
-      </div>
+      <button class="btn btn-outline-danger btn-sm" id="btn-parar" style="display:none">
+        <i class="bi bi-stop-circle me-1"></i>Parar Câmera
+      </button>
     </div>
 
     <!-- Entrada manual -->
@@ -84,7 +89,7 @@
       </div>
       <small class="text-muted mt-2 d-block">
         <i class="bi bi-info-circle me-1"></i>
-        Leitores USB/Bluetooth enviam o código e pressionam Enter automaticamente.
+        Leitores USB/Bluetooth funcionam automaticamente (Enter confirma).
       </small>
     </div>
   </div>
@@ -111,7 +116,9 @@
             {% for leitura in historico.items %}
             <tr id="row-{{ leitura.id }}">
               <td class="text-muted small">{{ leitura.id }}</td>
-              <td style="max-width:240px;word-break:break-all;font-size:.85rem">{{ leitura.codigo_lido }}</td>
+              <td style="max-width:240px;word-break:break-all;font-size:.85rem">
+                {{ leitura.codigo_lido }}
+              </td>
               <td class="text-nowrap small">{{ leitura.data_hora | datetime_br }}</td>
               <td class="text-center">
                 <span class="badge {{ 'bg-success' if leitura.identificado else 'bg-secondary' }}">
@@ -120,8 +127,7 @@
               </td>
               <td class="text-center">
                 <button class="btn btn-link btn-sm text-danger p-0"
-                        onclick="excluirLeitura({{ leitura.id }})"
-                        title="Excluir">
+                        onclick="excluirLeitura({{ leitura.id }})" title="Excluir">
                   <i class="bi bi-trash"></i>
                 </button>
               </td>
@@ -179,131 +185,70 @@
 
 {% block extra_scripts %}
 <script>
-const URL_SALVAR = "{{ url_for('leitura_qrcode.salvar') }}";
+const URL_SALVAR  = "{{ url_for('leitura_qrcode.salvar') }}";
 
-/* ──────────────────────────────────────────
-   Estado global
-────────────────────────────────────────── */
-const video    = document.getElementById('qr-video');
-const overlay  = document.getElementById('qr-overlay');
-const ctx      = overlay.getContext('2d');
-const canvas   = document.createElement('canvas');  // canvas oculto para jsQR
-const scanCtx  = canvas.getContext('2d', { willReadFrequently: true });
+/* ── ZXing reader (detecta QR e demais códigos de barras) ── */
+const reader   = new ZXing.BrowserMultiFormatReader();
+let   controls = null;
 
-let stream       = null;
-let rafId        = null;
+/* ── Debounce: evita salvar o mesmo código enquanto estiver na câmera ── */
 let ultimoCodigo = '';
 let debTimer     = null;
 
-/* ──────────────────────────────────────────
-   Iniciar câmera traseira
-────────────────────────────────────────── */
+function resetDebounce() {
+  clearTimeout(debTimer);
+  debTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
+}
+
+/* ────────────────────────────────────────
+   Iniciar câmera
+──────────────────────────────────────── */
 async function iniciarCamera() {
-  pararCamera();
-
-  const constraints = {
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-  };
-
   try {
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    await video.play();
-    document.getElementById('btn-iniciar').style.display = 'none';
-    document.getElementById('btn-parar').style.display  = '';
-    setFeedback('<i class="bi bi-circle-fill text-success me-1" style="font-size:.6rem"></i>Procurando QR Code…', '');
-    rafId = requestAnimationFrame(scanLoop);
+    controls = await reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+      document.getElementById('qr-video'),
+      (result, err) => {
+        /* err é lançado em frames sem código — comportamento normal, ignorar */
+        if (result) registrarCodigo(result.getText());
+      }
+    );
+
+    document.getElementById('start-overlay').style.display = 'none';
+    document.getElementById('btn-parar').style.display     = '';
+    setFeedback('<i class="bi bi-circle-fill text-success me-1" style="font-size:.55rem"></i>Procurando QR Code…');
+
   } catch (e) {
-    setFeedback('Erro ao acessar câmera: ' + e.message, 'text-danger');
+    /* Permissão negada ou dispositivo sem câmera */
+    setFeedback('Câmera indisponível: ' + e.message, 'text-danger');
   }
 }
 
-/* ──────────────────────────────────────────
+/* ────────────────────────────────────────
    Parar câmera
-────────────────────────────────────────── */
+──────────────────────────────────────── */
 function pararCamera() {
-  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  video.srcObject = null;
-  ctx.clearRect(0, 0, overlay.width, overlay.height);
-  document.getElementById('btn-iniciar').style.display = '';
+  if (controls) { controls.stop(); controls = null; }
+  reader.reset();
   document.getElementById('btn-parar').style.display   = 'none';
-  setFeedback('<i class="bi bi-camera me-1"></i>Câmera inativa.', 'text-muted');
+  document.getElementById('start-overlay').style.display = '';
+  setFeedback('Câmera inativa.');
 }
 
-/* ──────────────────────────────────────────
-   Loop de leitura (jsQR)
-   - copia frame do vídeo para canvas oculto
-   - jsQR tenta decodificar; inversionAttempts:'attemptBoth'
-     lida com QR claro-sobre-escuro E escuro-sobre-claro
-────────────────────────────────────────── */
-function scanLoop() {
-  if (!stream) return;
-
-  try {
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      const w = video.videoWidth;
-      const h = video.videoHeight;
-
-      if (w && h) {
-        canvas.width  = w;
-        canvas.height = h;
-        scanCtx.drawImage(video, 0, 0, w, h);
-
-        const imageData = scanCtx.getImageData(0, 0, w, h);
-        const code = jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' });
-
-        overlay.width  = video.offsetWidth;
-        overlay.height = video.offsetHeight;
-        ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-        if (code) {
-          const scaleX = overlay.width  / w;
-          const scaleY = overlay.height / h;
-          const loc    = code.location;
-
-          ctx.beginPath();
-          ctx.moveTo(loc.topLeftCorner.x     * scaleX, loc.topLeftCorner.y     * scaleY);
-          ctx.lineTo(loc.topRightCorner.x    * scaleX, loc.topRightCorner.y    * scaleY);
-          ctx.lineTo(loc.bottomRightCorner.x * scaleX, loc.bottomRightCorner.y * scaleY);
-          ctx.lineTo(loc.bottomLeftCorner.x  * scaleX, loc.bottomLeftCorner.y  * scaleY);
-          ctx.closePath();
-          ctx.lineWidth   = 3;
-          ctx.strokeStyle = '#28a745';
-          ctx.stroke();
-
-          registrarCodigo(code.data);
-        }
-      }
-    }
-  } catch (_) { /* erro de frame — continua o loop */ }
-
-  rafId = requestAnimationFrame(scanLoop);
-}
-
-/* ──────────────────────────────────────────
+/* ────────────────────────────────────────
    Registrar código
-   Debounce correto: enquanto o mesmo QR estiver em vista,
-   o timer é reiniciado a cada frame — só libera novo
-   registro 3s DEPOIS que o QR sair do campo da câmera.
-────────────────────────────────────────── */
+──────────────────────────────────────── */
 async function registrarCodigo(codigo) {
   codigo = (codigo || '').trim();
   if (!codigo) return;
 
-  if (codigo === ultimoCodigo) {
-    // Mesmo código: apenas reinicia o timer e ignora
-    clearTimeout(debTimer);
-    debTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
-    return;
-  }
+  /* Mesmo código ainda em vista: renova bloqueio e sai */
+  if (codigo === ultimoCodigo) { resetDebounce(); return; }
 
-  // Código novo: bloqueia e registra
   ultimoCodigo = codigo;
-  clearTimeout(debTimer);
-  debTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
+  resetDebounce();
 
-  setFeedback('⟳ Salvando…', 'text-primary');
+  setFeedback('⟳ Salvando…');
 
   try {
     const resp = await fetch(URL_SALVAR, {
@@ -315,7 +260,7 @@ async function registrarCodigo(codigo) {
     if (data.ok) {
       mostrarToast('✓ ' + data.codigo_lido.substring(0, 80), 'bg-success');
       adicionarLinha(data);
-      setFeedback('<i class="bi bi-circle-fill text-success me-1" style="font-size:.6rem"></i>Procurando QR Code…', '');
+      setFeedback('<i class="bi bi-circle-fill text-success me-1" style="font-size:.55rem"></i>Procurando QR Code…');
     } else {
       mostrarToast('Erro: ' + data.erro, 'bg-danger');
     }
@@ -324,9 +269,9 @@ async function registrarCodigo(codigo) {
   }
 }
 
-/* ──────────────────────────────────────────
+/* ────────────────────────────────────────
    Excluir leitura
-────────────────────────────────────────── */
+──────────────────────────────────────── */
 async function excluirLeitura(id) {
   if (!confirm('Excluir este registro?')) return;
   try {
@@ -336,15 +281,15 @@ async function excluirLeitura(id) {
     });
     const data = await resp.json();
     if (data.ok) {
-      const row = document.getElementById('row-' + id);
-      if (row) row.remove();
+      document.getElementById('row-' + id)?.remove();
       const badge = document.getElementById('badge-total');
       const total = Math.max(0, parseInt(badge.textContent || 0) - 1);
       badge.textContent = total;
       if (total === 0) {
         document.getElementById('historico-body').innerHTML =
           `<tr id="empty-row"><td colspan="5" class="text-center text-muted py-4">
-            <i class="bi bi-inbox fs-4 d-block mb-1"></i>Nenhuma leitura ainda.</td></tr>`;
+             <i class="bi bi-inbox fs-4 d-block mb-1"></i>Nenhuma leitura ainda.
+           </td></tr>`;
       }
     } else {
       mostrarToast('Erro ao excluir.', 'bg-danger');
@@ -354,13 +299,13 @@ async function excluirLeitura(id) {
   }
 }
 
-/* ──────────────────────────────────────────
+/* ────────────────────────────────────────
    Utilitários
-────────────────────────────────────────── */
-function setFeedback(html, cls) {
+──────────────────────────────────────── */
+function setFeedback(html, cls = '') {
   const el = document.getElementById('scan-feedback');
   el.innerHTML  = html;
-  el.className  = 'mb-2 small ' + cls;
+  el.className  = 'small mb-2 ' + cls;
 }
 
 function mostrarToast(msg, bgClass) {
@@ -371,9 +316,8 @@ function mostrarToast(msg, bgClass) {
 }
 
 function adicionarLinha(data) {
-  const tbody    = document.getElementById('historico-body');
-  const emptyRow = document.getElementById('empty-row');
-  if (emptyRow) emptyRow.remove();
+  const tbody = document.getElementById('historico-body');
+  document.getElementById('empty-row')?.remove();
 
   const tr = document.createElement('tr');
   tr.id = 'row-' + data.id;
@@ -383,11 +327,11 @@ function adicionarLinha(data) {
     <td class="text-nowrap small">${data.data_hora}</td>
     <td class="text-center"><span class="badge bg-secondary">Não</span></td>
     <td class="text-center">
-      <button class="btn btn-link btn-sm text-danger p-0" onclick="excluirLeitura(${data.id})" title="Excluir">
+      <button class="btn btn-link btn-sm text-danger p-0"
+              onclick="excluirLeitura(${data.id})" title="Excluir">
         <i class="bi bi-trash"></i>
       </button>
-    </td>
-  `;
+    </td>`;
   tbody.insertBefore(tr, tbody.firstChild);
   document.getElementById('badge-total').textContent =
     parseInt(document.getElementById('badge-total').textContent || 0) + 1;
@@ -397,13 +341,14 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-/* ──────────────────────────────────────────
+/* ────────────────────────────────────────
    Eventos
-────────────────────────────────────────── */
-document.getElementById('btn-iniciar').addEventListener('click', iniciarCamera);
+──────────────────────────────────────── */
+/* Overlay: toque/clique inicia a câmera (garante gesto de usuário em todos os browsers) */
+document.getElementById('start-overlay').addEventListener('click', iniciarCamera);
 document.getElementById('btn-parar').addEventListener('click', pararCamera);
 
-// Entrada manual
+/* Entrada manual */
 function submeterManual() {
   const input = document.getElementById('input-manual');
   const val   = input.value.trim();
@@ -414,10 +359,11 @@ document.getElementById('input-manual').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); submeterManual(); }
 });
 
-// Para câmera ao sair da página
+/* Para câmera ao sair da página */
 window.addEventListener('beforeunload', pararCamera);
 
-// Abre câmera automaticamente após todos os recursos carregarem
-window.addEventListener('load', () => iniciarCamera());
+/* Tenta auto-iniciar (funciona em Chrome desktop/Android sem gesto);
+   se o browser bloquear, o overlay "Toque para iniciar" permanece visível */
+window.addEventListener('load', iniciarCamera);
 </script>
 {% endblock %}
