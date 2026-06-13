@@ -2,60 +2,35 @@
 {% block title %}Leitura de Pacotes – {{ app_name }}{% endblock %}
 
 {% block extra_head %}
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
-  .scan-card {
-    border: none;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,.08);
-  }
+  .scan-card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
   .toast-container { z-index: 9999; }
-  #historico-table tbody tr:first-child td { font-weight: 600; }
 
-  /* ── Estilo do scanner embutido ── */
-  #qr-reader {
-    border: none !important;
-    padding: 0 !important;
-    width: 100% !important;
-  }
-  #qr-reader__scan_region {
+  #qr-video {
+    width: 100%;
     border-radius: 8px;
-    overflow: hidden;
-    background: #000;
+    background: #111;
+    display: block;
   }
-  #qr-reader__scan_region img { display: none; }   /* esconde logo html5-qrcode */
-  #qr-reader__dashboard { padding: 8px 0 0 !important; }
-  #qr-reader__dashboard_section_csr span { font-size: .85rem; color: #6c757d; }
-  #qr-reader__dashboard_section_csr button,
-  #qr-reader__status_span {
+  #qr-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    border-radius: 8px;
+  }
+  .video-wrap { position: relative; }
+
+  #scan-feedback {
     font-size: .82rem;
+    min-height: 1.4rem;
+    transition: color .2s;
   }
-  #qr-reader__camera_selection {
-    width: 100%;
-    padding: .375rem .75rem;
-    font-size: .875rem;
-    border: 1px solid #ced4da;
-    border-radius: .375rem;
-    margin-bottom: 8px;
-  }
-  #qr-reader__dashboard_section_csr > button {
-    width: 100%;
-    padding: .45rem .75rem;
-    border-radius: .375rem;
-    background-color: #1e6fe0;
-    color: #fff;
-    border: none;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background .15s;
-  }
-  #qr-reader__dashboard_section_csr > button:hover { background-color: #1558b0; }
-  #qr-reader__dashboard_section_swaplink { display: none; }  /* oculta troca de modo */
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Cabeçalho -->
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
   <div>
     <nav aria-label="breadcrumb">
@@ -75,19 +50,36 @@
     <div class="card scan-card p-3 mb-3">
       <h6 class="fw-bold mb-3"><i class="bi bi-qr-code-scan me-2"></i>Scanner QR Code</h6>
 
-      <!-- Html5QrcodeScanner renderiza aqui: seletor de câmera + vídeo -->
-      <div id="qr-reader"></div>
+      <!-- Seletor de câmera -->
+      <select id="camera-select" class="form-select form-select-sm mb-2" style="display:none">
+        <option value="">Carregando câmeras…</option>
+      </select>
 
-      <p class="text-muted small mt-2 mb-0">
-        <i class="bi bi-lightbulb me-1"></i>
-        Selecione a câmera, clique em <strong>Iniciar</strong> e aponte para o QR Code.
-        Em celulares, use a câmera traseira para melhor leitura de telas.
-      </p>
+      <!-- Vídeo + canvas de overlay -->
+      <div class="video-wrap mb-2">
+        <video id="qr-video" autoplay playsinline muted></video>
+        <canvas id="qr-overlay"></canvas>
+      </div>
+
+      <!-- Feedback de leitura -->
+      <div id="scan-feedback" class="text-muted mb-2">
+        <i class="bi bi-camera me-1"></i>Câmera inativa.
+      </div>
+
+      <!-- Botões -->
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm fw-semibold" id="btn-iniciar">
+          <i class="bi bi-camera-video me-1"></i>Iniciar Câmera
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="btn-parar" style="display:none">
+          <i class="bi bi-stop-circle me-1"></i>Parar
+        </button>
+      </div>
     </div>
 
     <!-- Entrada manual -->
     <div class="card scan-card p-3">
-      <h6 class="fw-bold mb-3"><i class="bi bi-keyboard me-2"></i>Leitura Manual / Leitor Externo</h6>
+      <h6 class="fw-bold mb-3"><i class="bi bi-keyboard me-2"></i>Entrada Manual / Leitor Externo</h6>
       <div class="input-group">
         <input type="text" id="input-manual" class="form-control"
                placeholder="Cole ou digite o código aqui">
@@ -97,7 +89,7 @@
       </div>
       <small class="text-muted mt-2 d-block">
         <i class="bi bi-info-circle me-1"></i>
-        Leitores USB/Bluetooth funcionam automaticamente neste campo.
+        Leitores USB/Bluetooth enviam o código e pressionam Enter automaticamente.
       </small>
     </div>
   </div>
@@ -109,9 +101,8 @@
         <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2"></i>Histórico de Leituras</h6>
         <span class="badge bg-secondary" id="badge-total">{{ historico.total }}</span>
       </div>
-
       <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0" id="historico-table">
+        <table class="table table-sm table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
               <th>#</th>
@@ -127,18 +118,15 @@
               <td style="max-width:260px;word-break:break-all;font-size:.85rem">{{ leitura.codigo_lido }}</td>
               <td class="text-nowrap small">{{ leitura.data_hora | datetime_br }}</td>
               <td class="text-center">
-                {% if leitura.identificado %}
-                  <span class="badge bg-success">Sim</span>
-                {% else %}
-                  <span class="badge bg-secondary">Não</span>
-                {% endif %}
+                <span class="badge {{ 'bg-success' if leitura.identificado else 'bg-secondary' }}">
+                  {{ 'Sim' if leitura.identificado else 'Não' }}
+                </span>
               </td>
             </tr>
             {% else %}
             <tr id="empty-row">
               <td colspan="4" class="text-center text-muted py-4">
-                <i class="bi bi-inbox fs-4 d-block mb-1"></i>
-                Nenhuma leitura registrada ainda.
+                <i class="bi bi-inbox fs-4 d-block mb-1"></i>Nenhuma leitura ainda.
               </td>
             </tr>
             {% endfor %}
@@ -175,7 +163,7 @@
   </div>
 </div>
 
-<!-- Toast de feedback -->
+<!-- Toast -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
   <div id="toast-scan" class="toast align-items-center text-white border-0" role="alert" aria-atomic="true">
     <div class="d-flex">
@@ -189,19 +177,153 @@
 {% block extra_scripts %}
 <script>
 const URL_SALVAR = "{{ url_for('leitura_qrcode.salvar') }}";
-let ultimoCodigo = '';
-let debounceTimer = null;
 
-/* ── Registrar leitura ── */
+/* ──────────────────────────────────────────
+   Estado global
+────────────────────────────────────────── */
+const video    = document.getElementById('qr-video');
+const overlay  = document.getElementById('qr-overlay');
+const ctx      = overlay.getContext('2d');
+const canvas   = document.createElement('canvas');  // canvas oculto para jsQR
+const scanCtx  = canvas.getContext('2d', { willReadFrequently: true });
+
+let stream       = null;
+let rafId        = null;
+let ultimoCodigo = '';
+let debTimer     = null;
+
+/* ──────────────────────────────────────────
+   Câmeras disponíveis
+────────────────────────────────────────── */
+async function listarCameras() {
+  try {
+    // Pede permissão primeiro (necessário para enumerateDevices retornar labels)
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+    tmp.getTracks().forEach(t => t.stop());
+
+    const devices  = await navigator.mediaDevices.enumerateDevices();
+    const cameras  = devices.filter(d => d.kind === 'videoinput');
+    const sel      = document.getElementById('camera-select');
+
+    sel.innerHTML = '';
+    cameras.forEach((cam, i) => {
+      const opt   = document.createElement('option');
+      opt.value   = cam.deviceId;
+      opt.text    = cam.label || `Câmera ${i + 1}`;
+      // Prefere câmera traseira por padrão
+      if (/back|rear|traseira|environment/i.test(cam.label)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+
+    sel.style.display = cameras.length > 1 ? 'block' : 'none';
+  } catch (e) {
+    setFeedback('Permissão de câmera negada.', 'text-danger');
+  }
+}
+
+/* ──────────────────────────────────────────
+   Iniciar câmera
+────────────────────────────────────────── */
+async function iniciarCamera() {
+  pararCamera();
+
+  const deviceId = document.getElementById('camera-select').value;
+  const constraints = {
+    video: deviceId
+      ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+  };
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    await video.play();
+    document.getElementById('btn-iniciar').style.display = 'none';
+    document.getElementById('btn-parar').style.display  = '';
+    setFeedback('<i class="bi bi-circle-fill text-success me-1" style="font-size:.6rem"></i>Procurando QR Code…', '');
+    rafId = requestAnimationFrame(scanLoop);
+  } catch (e) {
+    setFeedback('Erro ao acessar câmera: ' + e.message, 'text-danger');
+  }
+}
+
+/* ──────────────────────────────────────────
+   Parar câmera
+────────────────────────────────────────── */
+function pararCamera() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  document.getElementById('btn-iniciar').style.display = '';
+  document.getElementById('btn-parar').style.display   = 'none';
+  setFeedback('<i class="bi bi-camera me-1"></i>Câmera inativa.', 'text-muted');
+}
+
+/* ──────────────────────────────────────────
+   Loop de leitura (jsQR)
+   - copia frame do vídeo para canvas oculto
+   - jsQR tenta decodificar; inversionAttempts:'attemptBoth'
+     lida com QR claro-sobre-escuro E escuro-sobre-claro
+────────────────────────────────────────── */
+function scanLoop() {
+  if (!stream) return;
+
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+
+    if (w && h) {
+      canvas.width  = w;
+      canvas.height = h;
+      scanCtx.drawImage(video, 0, 0, w, h);
+
+      const imageData = scanCtx.getImageData(0, 0, w, h);
+      const code = jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' });
+
+      // Sincroniza tamanho do overlay com o vídeo renderizado
+      overlay.width  = video.offsetWidth;
+      overlay.height = video.offsetHeight;
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+      if (code) {
+        // Desenha bounding box verde proporcional ao vídeo renderizado
+        const scaleX = overlay.width  / w;
+        const scaleY = overlay.height / h;
+        const loc = code.location;
+
+        ctx.beginPath();
+        ctx.moveTo(loc.topLeftCorner.x     * scaleX, loc.topLeftCorner.y     * scaleY);
+        ctx.lineTo(loc.topRightCorner.x    * scaleX, loc.topRightCorner.y    * scaleY);
+        ctx.lineTo(loc.bottomRightCorner.x * scaleX, loc.bottomRightCorner.y * scaleY);
+        ctx.lineTo(loc.bottomLeftCorner.x  * scaleX, loc.bottomLeftCorner.y  * scaleY);
+        ctx.closePath();
+        ctx.lineWidth   = 3;
+        ctx.strokeStyle = '#28a745';
+        ctx.stroke();
+
+        registrarCodigo(code.data);
+      }
+    }
+  }
+
+  rafId = requestAnimationFrame(scanLoop);
+}
+
+/* ──────────────────────────────────────────
+   Registrar código
+────────────────────────────────────────── */
 async function registrarCodigo(codigo) {
   codigo = (codigo || '').trim();
   if (!codigo) return;
 
-  // Debounce: evita duplicar o mesmo código em 3s (câmeras detectam várias vezes)
+  // Debounce: ignora o mesmo código por 3s
   if (codigo === ultimoCodigo) return;
   ultimoCodigo = codigo;
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
+  clearTimeout(debTimer);
+  debTimer = setTimeout(() => { ultimoCodigo = ''; }, 3000);
+
+  setFeedback('⟳ Salvando…', 'text-primary');
 
   try {
     const resp = await fetch(URL_SALVAR, {
@@ -213,6 +335,7 @@ async function registrarCodigo(codigo) {
     if (data.ok) {
       mostrarToast('✓ ' + data.codigo_lido.substring(0, 80), 'bg-success');
       adicionarLinha(data);
+      setFeedback('<i class="bi bi-circle-fill text-success me-1" style="font-size:.6rem"></i>Procurando QR Code…', '');
     } else {
       mostrarToast('Erro: ' + data.erro, 'bg-danger');
     }
@@ -221,9 +344,24 @@ async function registrarCodigo(codigo) {
   }
 }
 
-/* ── Tabela ── */
+/* ──────────────────────────────────────────
+   Utilitários
+────────────────────────────────────────── */
+function setFeedback(html, cls) {
+  const el = document.getElementById('scan-feedback');
+  el.innerHTML  = html;
+  el.className  = 'mb-2 small ' + cls;
+}
+
+function mostrarToast(msg, bgClass) {
+  const el = document.getElementById('toast-scan');
+  el.className = `toast align-items-center text-white border-0 ${bgClass}`;
+  document.getElementById('toast-msg').textContent = msg;
+  bootstrap.Toast.getOrCreateInstance(el, { delay: 4000 }).show();
+}
+
 function adicionarLinha(data) {
-  const tbody = document.getElementById('historico-body');
+  const tbody    = document.getElementById('historico-body');
   const emptyRow = document.getElementById('empty-row');
   if (emptyRow) emptyRow.remove();
 
@@ -235,57 +373,36 @@ function adicionarLinha(data) {
     <td class="text-center"><span class="badge bg-secondary">Não</span></td>
   `;
   tbody.insertBefore(tr, tbody.firstChild);
-
-  const badge = document.getElementById('badge-total');
-  badge.textContent = parseInt(badge.textContent || 0) + 1;
+  document.getElementById('badge-total').textContent =
+    parseInt(document.getElementById('badge-total').textContent || 0) + 1;
 }
 
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-/* ── Toast ── */
-function mostrarToast(msg, bgClass) {
-  const el = document.getElementById('toast-scan');
-  el.className = `toast align-items-center text-white border-0 ${bgClass}`;
-  document.getElementById('toast-msg').textContent = msg;
-  bootstrap.Toast.getOrCreateInstance(el, { delay: 4000 }).show();
-}
+/* ──────────────────────────────────────────
+   Eventos
+────────────────────────────────────────── */
+document.getElementById('btn-iniciar').addEventListener('click', iniciarCamera);
+document.getElementById('btn-parar').addEventListener('click', pararCamera);
+document.getElementById('camera-select').addEventListener('change', () => { if (stream) iniciarCamera(); });
 
-/* ── Html5QrcodeScanner ──
-   - Sem qrbox → escaneia o frame inteiro (muito mais fácil de acertar)
-   - fps: 25 → captura mais frames por segundo
-   - experimentalFeatures.useBarCodeDetectorIfSupported → usa API nativa do browser quando disponível (Chrome 83+, Edge, Android), muito mais rápida
-   - showTorchButtonIfSupported → botão de lanterna em celular
-   - rememberLastUsedCamera → lembra a câmera selecionada
-*/
-const scanner = new Html5QrcodeScanner(
-  'qr-reader',
-  {
-    fps: 25,
-    rememberLastUsedCamera: true,
-    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-    showTorchButtonIfSupported: true,
-    showZoomSliderIfSupported: true,
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-  },
-  /* verbose= */ false
-);
-
-scanner.render(
-  (decodedText) => { registrarCodigo(decodedText); },
-  (_err) => { /* erros de frame são normais, ignorar */ }
-);
-
-/* ── Entrada manual ── */
+// Entrada manual
 function submeterManual() {
   const input = document.getElementById('input-manual');
-  const val = input.value.trim();
+  const val   = input.value.trim();
   if (val) { registrarCodigo(val); input.value = ''; input.focus(); }
 }
 document.getElementById('btn-manual').addEventListener('click', submeterManual);
 document.getElementById('input-manual').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); submeterManual(); }
 });
+
+// Para câmera ao sair da página
+window.addEventListener('beforeunload', pararCamera);
+
+// Inicializa lista de câmeras ao carregar
+listarCameras();
 </script>
 {% endblock %}
