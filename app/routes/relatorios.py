@@ -47,15 +47,21 @@ def index():
         periodo = 'mes_atual'
     inicio, fim = _datas_periodo(periodo)
 
-    # Filtro de marketplace
+    # Filtros de marketplace e transportadora
     marketplace_id = request.args.get('marketplace_id', '', type=str)
     marketplace_id = int(marketplace_id) if marketplace_id.isdigit() else None
     marketplaces = Marketplace.query.filter_by(ativo=True).order_by(Marketplace.nome).all()
 
-    # Filtros-base de período (e marketplace quando selecionado)
+    transportadora_id = request.args.get('transportadora_id', '', type=str)
+    transportadora_id = int(transportadora_id) if transportadora_id.isdigit() else None
+    transportadoras = Transportadora.query.order_by(Transportadora.nome).all()
+
+    # Filtros-base de período + marketplace + transportadora
     filtros_base = [Encomenda.data_envio.between(inicio, fim)]
     if marketplace_id:
         filtros_base.append(Encomenda.marketplace_id == marketplace_id)
+    if transportadora_id:
+        filtros_base.append(Encomenda.transportadora_id == transportadora_id)
 
     base = Encomenda.query.filter(*filtros_base)
 
@@ -148,6 +154,8 @@ def index():
         periodos=PERIODOS,
         marketplace_id=marketplace_id,
         marketplaces=marketplaces,
+        transportadora_id=transportadora_id,
+        transportadoras=transportadoras,
         total_encomendas=total_encomendas,
         total_caixas=int(total_caixas),
         valor_total_frete=valor_total_frete,
