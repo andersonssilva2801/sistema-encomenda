@@ -126,6 +126,30 @@ def index():
     transp_labels = [r.nome for r in por_transp]
     transp_data   = [int(r.total_caixas) for r in por_transp]
 
+    # Gráfico linha: caixas por dia por transportadora
+    por_dia_transp = db.session.query(
+        Encomenda.data_envio,
+        Transportadora.nome,
+        func.coalesce(func.sum(Encomenda.quantidade_caixas), 0).label('total_caixas')
+    ).select_from(Encomenda
+    ).join(Transportadora, Encomenda.transportadora_id == Transportadora.id
+    ).filter(*filtros_base
+    ).group_by(Encomenda.data_envio, Transportadora.nome
+    ).order_by(Encomenda.data_envio).all()
+
+    datas_linha  = sorted(set(r.data_envio for r in por_dia_transp))
+    transp_linha = sorted(set(r.nome       for r in por_dia_transp))
+
+    pivot_linha = {}
+    for r in por_dia_transp:
+        pivot_linha.setdefault(r.data_envio, {})[r.nome] = int(r.total_caixas)
+
+    linha_labels   = [d.strftime('%d/%m') for d in datas_linha]
+    linha_datasets = [
+        {'label': nome, 'data': [pivot_linha.get(d, {}).get(nome, 0) for d in datas_linha]}
+        for nome in transp_linha
+    ]
+
     # Gráfico agrupado: valor de frete por Marketplace × tipo de movimento
     por_mp_tipo = db.session.query(
         Marketplace.nome,
@@ -173,4 +197,6 @@ def index():
         mp_labels=mp_labels,
         mp_envio_data=mp_envio_data,
         mp_devolucao_data=mp_devolucao_data,
+        linha_labels=linha_labels,
+        linha_datasets=linha_datasets,
     )

@@ -101,6 +101,25 @@
   </div>
 </div>
 
+<!-- Gráfico linha: caixas por dia por transportadora -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card chart-card">
+      <div class="card-header bg-white fw-semibold border-bottom-0 pb-0">
+        Caixas por Dia
+        <small class="text-muted fw-normal">(por transportadora)</small>
+      </div>
+      <div class="card-body">
+        {% if linha_labels %}
+          <canvas id="chartLinha" style="max-height:320px"></canvas>
+        {% else %}
+          <p class="text-muted text-center py-5">Nenhum dado no período selecionado.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Gráfico: Valor por Marketplace × Tipo -->
 <div class="row g-3 mb-4">
   <div class="col-12">
@@ -251,6 +270,50 @@
         }
       },
       cutout: '60%',
+    }
+  });
+  {% endif %}
+
+  {% if linha_labels %}
+  // Gráfico Linha – Caixas por Dia por Transportadora
+  const LINHA_CORES = [
+    '#1e6fe0','#28a745','#dc3545','#ffc107','#6f42c1',
+    '#fd7e14','#20c997','#e83e8c','#17a2b8','#6c757d'
+  ];
+  new Chart(document.getElementById('chartLinha'), {
+    type: 'line',
+    data: {
+      labels: {{ linha_labels | tojson }},
+      datasets: {{ linha_datasets | tojson }}.map((ds, i) => Object.assign({}, ds, {
+        borderColor:     LINHA_CORES[i % LINHA_CORES.length],
+        backgroundColor: LINHA_CORES[i % LINHA_CORES.length] + '22',
+        tension: 0.35,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        fill: false,
+        borderWidth: 2,
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { padding: 14, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('pt-BR')} cx`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: val => val.toLocaleString('pt-BR'), stepSize: 1 },
+          grid: { color: 'rgba(0,0,0,.06)' }
+        },
+        x: { grid: { display: false } }
+      }
     }
   });
   {% endif %}
