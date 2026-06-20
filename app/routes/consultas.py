@@ -63,6 +63,7 @@ def index():
     encomendas = []
     total_caixas = 0
     total_registros = 0
+    total_valor = 0.0
 
     if pesquisado:
         form_data = {
@@ -76,6 +77,10 @@ def index():
         encomendas = _build_query(form_data).all()
         total_caixas = sum(e.quantidade_caixas for e in encomendas)
         total_registros = len(encomendas)
+        total_valor = sum(
+            float(e.transportadora.valor_padrao or 0) * e.quantidade_caixas
+            for e in encomendas if e.transportadora
+        )
 
     return render_template(
         'consultas/index.html',
@@ -83,6 +88,7 @@ def index():
         encomendas=encomendas,
         total_caixas=total_caixas,
         total_registros=total_registros,
+        total_valor=total_valor,
         pesquisado=pesquisado,
     )
 
@@ -124,7 +130,7 @@ def exportar_excel():
     cabecalho_fill = PatternFill(start_color='1e3a5f', end_color='1e3a5f', fill_type='solid')
     cabecalho_font = Font(color='FFFFFF', bold=True)
 
-    cabecalhos = ['#', 'Data', 'Tipo', 'Marketplace', 'Transportadora', 'Funcionário', 'Qtd Caixas', 'Observações', 'Registrado por']
+    cabecalhos = ['#', 'Data', 'Tipo', 'Marketplace', 'Transportadora', 'Funcionário', 'Qtd Caixas', 'Valor Frete (R$)', 'Observações', 'Registrado por']
     for col, titulo in enumerate(cabecalhos, start=1):
         cell = ws.cell(row=1, column=col, value=titulo)
         cell.fill = cabecalho_fill
@@ -132,6 +138,7 @@ def exportar_excel():
         cell.alignment = Alignment(horizontal='center')
 
     for row, enc in enumerate(encomendas, start=2):
+        valor_frete = float(enc.transportadora.valor_padrao or 0) * enc.quantidade_caixas if enc.transportadora else 0.0
         ws.cell(row=row, column=1, value=enc.codigo_formatado)
         ws.cell(row=row, column=2, value=enc.data_envio_formatada)
         ws.cell(row=row, column=3, value=enc.tipo_movimento)
@@ -139,13 +146,17 @@ def exportar_excel():
         ws.cell(row=row, column=5, value=enc.transportadora.nome if enc.transportadora else '')
         ws.cell(row=row, column=6, value=enc.funcionario.nome if enc.funcionario else '')
         ws.cell(row=row, column=7, value=enc.quantidade_caixas)
-        ws.cell(row=row, column=8, value=enc.observacoes or '')
-        ws.cell(row=row, column=9, value=enc.usuario.nome if enc.usuario else '')
+        ws.cell(row=row, column=8, value=round(valor_frete, 2))
+        ws.cell(row=row, column=9, value=enc.observacoes or '')
+        ws.cell(row=row, column=10, value=enc.usuario.nome if enc.usuario else '')
 
     # Linha de totais
     ultima_linha = len(encomendas) + 2
+    total_cx  = sum(e.quantidade_caixas for e in encomendas)
+    total_val = sum(float(e.transportadora.valor_padrao or 0) * e.quantidade_caixas for e in encomendas if e.transportadora)
     ws.cell(row=ultima_linha, column=6, value='TOTAL:').font = Font(bold=True)
-    ws.cell(row=ultima_linha, column=7, value=sum(e.quantidade_caixas for e in encomendas)).font = Font(bold=True)
+    ws.cell(row=ultima_linha, column=7, value=total_cx).font  = Font(bold=True)
+    ws.cell(row=ultima_linha, column=8, value=round(total_val, 2)).font = Font(bold=True)
 
     for col in range(1, len(cabecalhos) + 1):
         ws.column_dimensions[ws.cell(row=1, column=col).column_letter].auto_size = True
