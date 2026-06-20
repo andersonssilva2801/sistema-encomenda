@@ -34,22 +34,23 @@
     <h4 class="mb-0 fw-bold">Relatórios</h4>
   </div>
 
-  <!-- Seletor de período -->
-  <form method="GET" action="{{ url_for('relatorios.index') }}" class="d-flex gap-2 align-items-center flex-wrap">
+  <!-- Filtros: período + marketplace numa linha só -->
+  <form method="GET" action="{{ url_for('relatorios.index') }}"
+        class="d-flex gap-2 align-items-center flex-nowrap">
     <label class="form-label mb-0 fw-semibold text-nowrap small">Período</label>
-    <select name="periodo" class="form-select form-select-sm" style="min-width:160px">
+    <select name="periodo" class="form-select form-select-sm" style="min-width:150px">
       {% for valor, nome in periodos %}
         <option value="{{ valor }}" {{ 'selected' if periodo == valor }}>{{ nome }}</option>
       {% endfor %}
     </select>
-    <label class="form-label mb-0 fw-semibold text-nowrap small ms-2">Marketplace</label>
-    <select name="marketplace_id" class="form-select form-select-sm" style="min-width:170px">
+    <label class="form-label mb-0 fw-semibold text-nowrap small">Marketplace</label>
+    <select name="marketplace_id" class="form-select form-select-sm" style="min-width:160px">
       <option value="">Todos</option>
       {% for mp in marketplaces %}
         <option value="{{ mp.id }}" {{ 'selected' if marketplace_id == mp.id }}>{{ mp.nome }}</option>
       {% endfor %}
     </select>
-    <button type="submit" class="btn btn-primary btn-sm fw-semibold px-3">GERAR</button>
+    <button type="submit" class="btn btn-primary btn-sm fw-semibold px-3 text-nowrap">GERAR</button>
   </form>
 </div>
 
@@ -83,6 +84,25 @@
       <div class="card-body">
         {% if transp_data %}
           <canvas id="chartTransp" style="max-height:240px"></canvas>
+        {% else %}
+          <p class="text-muted text-center py-5">Nenhum dado no período selecionado.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gráfico: Valor por Marketplace × Tipo -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card chart-card">
+      <div class="card-header bg-white fw-semibold border-bottom-0 pb-0">
+        Valor de Frete por Marketplace
+        <small class="text-muted fw-normal">(Envio vs Devolução)</small>
+      </div>
+      <div class="card-body">
+        {% if mp_labels %}
+          <canvas id="chartMarketplace" style="max-height:300px"></canvas>
         {% else %}
           <p class="text-muted text-center py-5">Nenhum dado no período selecionado.</p>
         {% endif %}
@@ -222,6 +242,58 @@
         }
       },
       cutout: '60%',
+    }
+  });
+  {% endif %}
+
+  {% if mp_labels %}
+  // Gráfico Barra Agrupada – Valor por Marketplace × Tipo
+  new Chart(document.getElementById('chartMarketplace'), {
+    type: 'bar',
+    data: {
+      labels: {{ mp_labels | tojson }},
+      datasets: [
+        {
+          label: 'Envio',
+          data: {{ mp_envio_data | tojson }},
+          backgroundColor: '#1e6fe0',
+          borderRadius: 4,
+          barPercentage: 0.7,
+        },
+        {
+          label: 'Devolução',
+          data: {{ mp_devolucao_data | tojson }},
+          backgroundColor: '#dc3545',
+          borderRadius: 4,
+          barPercentage: 0.7,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'top', labels: { padding: 16, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              const s = v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+              return ` ${ctx.dataset.label}: R$ ${s}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: val => 'R$ ' + val.toLocaleString('pt-BR', { minimumFractionDigits: 0 })
+          },
+          grid: { color: 'rgba(0,0,0,.06)' }
+        },
+        x: { grid: { display: false } }
+      }
     }
   });
   {% endif %}

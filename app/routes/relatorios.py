@@ -120,6 +120,28 @@ def index():
     transp_labels = [r.nome for r in por_transp]
     transp_data   = [int(r.total_caixas) for r in por_transp]
 
+    # Gráfico agrupado: valor de frete por Marketplace × tipo de movimento
+    por_mp_tipo = db.session.query(
+        Marketplace.nome,
+        Encomenda.tipo_movimento,
+        func.coalesce(func.sum(Transportadora.valor_padrao * Encomenda.quantidade_caixas), 0).label('valor')
+    ).select_from(Encomenda
+    ).join(Marketplace,    Encomenda.marketplace_id    == Marketplace.id
+    ).join(Transportadora, Encomenda.transportadora_id == Transportadora.id
+    ).filter(*filtros_base
+    ).group_by(Marketplace.nome, Encomenda.tipo_movimento
+    ).order_by(Marketplace.nome).all()
+
+    # Pivô: {marketplace: {tipo: valor}}
+    mp_pivot = {}
+    for r in por_mp_tipo:
+        mp_pivot.setdefault(r.nome, {'Envio': 0.0, 'Devolução': 0.0})
+        mp_pivot[r.nome][r.tipo_movimento] = float(r.valor)
+
+    mp_labels        = list(mp_pivot.keys())
+    mp_envio_data    = [mp_pivot[n].get('Envio',     0.0) for n in mp_labels]
+    mp_devolucao_data = [mp_pivot[n].get('Devolução', 0.0) for n in mp_labels]
+
     return render_template(
         'relatorios/index.html',
         periodo=periodo,
@@ -140,4 +162,7 @@ def index():
         devolucao_stats=devolucao_stats,
         saldo_valor=saldo_valor,
         saldo_caixas=saldo_caixas,
+        mp_labels=mp_labels,
+        mp_envio_data=mp_envio_data,
+        mp_devolucao_data=mp_devolucao_data,
     )
