@@ -5,6 +5,7 @@ from sqlalchemy import func
 from dateutil.relativedelta import relativedelta
 from app.extensions import db
 from app.models.encomenda import Encomenda
+from app.models.marketplace import Marketplace
 from app.models.transportadora import Transportadora
 
 relatorios_bp = Blueprint('relatorios', __name__, url_prefix='/relatorios')
@@ -46,13 +47,23 @@ def index():
         periodo = 'mes_atual'
     inicio, fim = _datas_periodo(periodo)
 
-    base = Encomenda.query.filter(Encomenda.data_envio.between(inicio, fim))
+    # Filtro de marketplace
+    marketplace_id = request.args.get('marketplace_id', '', type=str)
+    marketplace_id = int(marketplace_id) if marketplace_id.isdigit() else None
+    marketplaces = Marketplace.query.filter_by(ativo=True).order_by(Marketplace.nome).all()
+
+    # Filtros-base de período (e marketplace quando selecionado)
+    filtros_base = [Encomenda.data_envio.between(inicio, fim)]
+    if marketplace_id:
+        filtros_base.append(Encomenda.marketplace_id == marketplace_id)
+
+    base = Encomenda.query.filter(*filtros_base)
 
     # Totais gerais
     total_encomendas = base.count()
     total_caixas = db.session.query(
         func.coalesce(func.sum(Encomenda.quantidade_caixas), 0)
-    ).filter(Encomenda.data_envio.between(inicio, fim)).scalar()
+    ).filter(*filtros_base).scalar()
 
     # Valor total de frete: valor_padrao da transportadora × quantidade_caixas
     valor_total_frete = db.session.query(
@@ -61,7 +72,7 @@ def index():
         )
     ).select_from(Encomenda
     ).join(Transportadora, Encomenda.transportadora_id == Transportadora.id
-    ).filter(Encomenda.data_envio.between(inicio, fim)).scalar()
+    ).filter(*filtros_base).scalar()
 
     valor_total_frete = float(valor_total_frete or 0)
     media_por_encomenda = valor_total_frete / total_encomendas if total_encomendas else 0
@@ -71,7 +82,7 @@ def index():
         Encomenda.tipo_movimento,
         func.count(Encomenda.id).label('total')
     ).filter(
-        Encomenda.data_envio.between(inicio, fim)
+        *filtros_base
     ).group_by(Encomenda.tipo_movimento).all()
 
     tipo_labels = [r.tipo_movimento for r in por_tipo]
@@ -84,7 +95,7 @@ def index():
         func.coalesce(func.sum(Transportadora.valor_padrao * Encomenda.quantidade_caixas), 0).label('valor_frete')
     ).select_from(Encomenda
     ).join(Transportadora, Encomenda.transportadora_id == Transportadora.id
-    ).filter(Encomenda.data_envio.between(inicio, fim)
+    ).filter(*filtros_base
     ).group_by(Encomenda.tipo_movimento).all()
 
     stats_por_tipo = {r.tipo_movimento: {'caixas': int(r.total_caixas), 'valor': float(r.valor_frete)}
@@ -101,7 +112,7 @@ def index():
     ).select_from(Encomenda
     ).join(Transportadora, Encomenda.transportadora_id == Transportadora.id
     ).filter(
-        Encomenda.data_envio.between(inicio, fim)
+        *filtros_base
     ).group_by(Transportadora.nome
     ).order_by(func.sum(Encomenda.quantidade_caixas).desc()
     ).limit(5).all()
@@ -113,6 +124,8 @@ def index():
         'relatorios/index.html',
         periodo=periodo,
         periodos=PERIODOS,
+        marketplace_id=marketplace_id,
+        marketplaces=marketplaces,
         total_encomendas=total_encomendas,
         total_caixas=int(total_caixas),
         valor_total_frete=valor_total_frete,
